@@ -12,13 +12,12 @@
 #include <string>
 #include <vector>
 
-BaxterTrajectory::BaxterTrajectory(std::string limb)
+BaxterTrajectory::BaxterTrajectory(std::string limb) :
+action_client("baxter_traj_as", true)
 {
-  action_client = new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("baxter_traj_as", true);
-
   goal.goal_time_tolerance = ros::Duration(0.1);
 
-  if (!action_client->waitForResult(ros::Duration(5.0)))
+  if (!action_client.waitForResult(ros::Duration(5.0)))
   {
     ROS_ERROR("Could not contact action server");
     ros::shutdown();
@@ -29,7 +28,7 @@ BaxterTrajectory::BaxterTrajectory(std::string limb)
 
 BaxterTrajectory::~BaxterTrajectory()
 {
-  delete action_client;
+  // delete action_client;
 }
 
 void BaxterTrajectory::addPoint(std::vector<float> positions, float time)
@@ -46,17 +45,17 @@ void BaxterTrajectory::addPoint(std::vector<float> positions, float time)
 void BaxterTrajectory::start()
 {
   goal.trajectory.header.stamp = ros::Time::now();
-  action_client->sendGoal(goal);  // TODO(lucbettaieb): Maybe add in a callback
+  action_client.sendGoal(goal);  // TODO(lucbettaieb): Maybe add in a callback
 }
 
 void BaxterTrajectory::stop()
 {
-  action_client->cancelGoal();
+  action_client.cancelGoal();
 }
 
 void BaxterTrajectory::wait(float timeout = 15.0)
 {
-  action_client->waitForResult(ros::Duration(timeout));
+  action_client.waitForResult(ros::Duration(timeout));
 }
 
 void BaxterTrajectory::clear(std::string limb)

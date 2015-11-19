@@ -26,7 +26,7 @@ public:
   virtual ~BaxterTrajectory();
 
 private:
-  actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> *action_client;
+  actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> action_client;
   control_msgs::FollowJointTrajectoryGoal goal;
 
 public:
