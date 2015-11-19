@@ -11,6 +11,7 @@
 #include <ros/ros.h>
 
 #include <trajectory_msgs/JointTrajectoryPoint.h>
+#include <sensor_msgs/JointState.h>
 #include <control_msgs/FollowJointTrajectoryAction.h>
 #include <control_msgs/FollowJointTrajectoryGoal.h>
 
@@ -22,10 +23,11 @@
 class BaxterTrajectory
 {
 public:
-  explicit BaxterTrajectory(std::string limb);
+  explicit BaxterTrajectory(ros::NodeHandle nh, std::string limb);
   virtual ~BaxterTrajectory();
 
 private:
+  ros::NodeHandle nh_;
   actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> action_client;
   control_msgs::FollowJointTrajectoryGoal goal;
 
@@ -35,6 +37,10 @@ public:
   void stop();
   void wait(float timeout);
   void clear(std::string limb);
+  void updateLeftJointAngles(const sensor_msgs::JointState& jointstate);
+  std::vector<float> getVecFromJointPos();
+
+
 };
 
 

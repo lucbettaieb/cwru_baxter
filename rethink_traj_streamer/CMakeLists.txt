@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   trajectory_msgs
   control_msgs
+  sensor_msgs
   actionlib
   actionlib_msgs
 )
