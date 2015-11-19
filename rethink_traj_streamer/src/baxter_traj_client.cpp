@@ -2,8 +2,7 @@
  * baxter_traj_client
  *
  * Copyright (c) 2015, Luc Bettaieb
- *
- * Based off of 'joint_trajectory_client.py' (c) 2013-2015, Rethink Robotics
+ * 'joint_trajectory_client.py' (c) 2013-2015, Rethink Robotics
  *
  * BSD Licensed
  */
@@ -19,7 +18,7 @@ BaxterTrajectory::BaxterTrajectory(std::string limb)
 
   goal.goal_time_tolerance = ros::Duration(0.1);
 
-  if (!action_client.waitForResult(ros::Duration(5.0)))
+  if (!action_client->waitForResult(ros::Duration(5.0)))
   {
     ROS_ERROR("Could not contact action server");
     ros::shutdown();
@@ -33,38 +32,47 @@ BaxterTrajectory::~BaxterTrajectory()
   delete action_client;
 }
 
-BaxterTrajectory::add_point(std::vector<float> positions, float time)
+void BaxterTrajectory::addPoint(std::vector<float> positions, float time)
 {
   trajectory_msgs::JointTrajectoryPoint point;
 
   for (uint i = 0; i < positions.size(); i++)
     point.positions.push_back(positions[i]);
 
-  point.time_from_start(ros::Duration(time));
+  point.time_from_start = ros::Duration(time);
   goal.trajectory.points.push_back(point);
 }
 
-BaxterTrajectory::start()
+void BaxterTrajectory::start()
 {
+  goal.trajectory.header.stamp = ros::Time::now();
+  action_client->sendGoal(goal);  // TODO(lucbettaieb): Maybe add in a callback
 }
 
-BaxterTrajectory::stop()
+void BaxterTrajectory::stop()
 {
+  action_client->cancelGoal();
 }
 
-BaxterTrajectory::wait(float timeout)
+void BaxterTrajectory::wait(float timeout = 15.0)
 {
+  action_client->waitForResult(ros::Duration(timeout));
 }
 
-BaxterTrajectory::clear(std::string limb)
+void BaxterTrajectory::clear(std::string limb)
 {
   goal.goal_time_tolerance = ros::Duration(0.1);
 
-  goal.trajectory_joint_names.push_back(limb + "_s0");
-  goal.trajectory_joint_names.push_back(limb + "_s1");
-  goal.trajectory_joint_names.push_back(limb + "_e0");
-  goal.trajectory_joint_names.push_back(limb + "_e1");
-  goal.trajectory_joint_names.push_back(limb + "_w0");
-  goal.trajectory_joint_names.push_back(limb + "_w1");
-  goal.trajectory_joint_names.push_back(limb + "_w2");
+  goal.trajectory.joint_names.push_back(limb + "_s0");
+  goal.trajectory.joint_names.push_back(limb + "_s1");
+  goal.trajectory.joint_names.push_back(limb + "_e0");
+  goal.trajectory.joint_names.push_back(limb + "_e1");
+  goal.trajectory.joint_names.push_back(limb + "_w0");
+  goal.trajectory.joint_names.push_back(limb + "_w1");
+  goal.trajectory.joint_names.push_back(limb + "_w2");
+}
+
+int main(int argc, char** argv)
+{
+  ros::init(argc, argv, "baxter_traj_client");
 }

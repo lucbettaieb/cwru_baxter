@@ -23,18 +23,17 @@ class BaxterTrajectory
 {
 public:
   explicit BaxterTrajectory(std::string limb);
-  virtual BaxterTrajectory();
+  virtual ~BaxterTrajectory();
 
 private:
   actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> *action_client;
-  trajectory_msgs::FollowJointTrajectoryGoal goal;
+  control_msgs::FollowJointTrajectoryGoal goal;
 
 public:
-  void add_point(std::vector<float> positions, float time);
+  void addPoint(std::vector<float> positions, float time);
   void start();
   void stop();
   void wait(float timeout);
-  // std::string result();
   void clear(std::string limb);
 };
 
