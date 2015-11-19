@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
         baxter_traj_streamer::trajGoal goal; 
         
         // use the name of our server, which is: example_action (named in example_action_server.cpp)
-        actionlib::SimpleActionClient<baxter_traj_streamer::trajAction> action_client("trajActionServer", true);
+        actionlib::SimpleActionClient<baxter_traj_streamer::trajAction> *action_client;
         
         // attempt to connect to the server:
         ROS_INFO("waiting for server: ");
