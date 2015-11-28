@@ -8,15 +8,19 @@
 // The action message can be found in: .../baxter_traj_streamer/action/traj.action
 // Automated header generation creates multiple headers for message I/O
 // These are referred to by the root name (traj) and appended name (Action)
-//#include<baxter_traj_streamer/trajAction.h>
+#include <baxter_traj_streamer/trajAction.h>
 
-// Nov 3, 2015 update: moved action message to cwru_action...
-// all code using this streamer will need to include cwru_action and use action message here
-#include<cwru_action/trajAction.h>
 using namespace std;
 
-
+//int g_count=0; //just for testing
+//trajectory_msgs::JointTrajectory new_trajectory; // global var to receive new traj's;
+//bool got_new_trajectory = false;
+//bool got_new_goal = false;
+//bool working_on_trajectory = false;
+//baxter_core_msgs::JointCommand right_cmd,left_cmd;
 ros::Publisher joint_cmd_pub_right;
+
+ros::Publisher joint_cmd_pub_left;
 
 /* maybe restore this later
 bool trajInterpStatusSvc(cwru_srv::simple_bool_service_messageRequest& request, cwru_srv::simple_bool_service_messageResponse& response) {
@@ -88,33 +92,38 @@ private:
     // this class will own a "SimpleActionServer" called "as_".
     // it will communicate using messages defined in baxter_traj_streamer/action/traj.action
     // the type "trajAction" is auto-generated from our name "traj" and generic name "Action"
-    actionlib::SimpleActionServer<cwru_action::trajAction> as_;
+    actionlib::SimpleActionServer<baxter_traj_streamer::trajAction> as_;
 
     // here are some message types to communicate with our client(s)
-    cwru_action::trajGoal goal_; // goal message, received from client
-    cwru_action::trajResult result_; // put results here, to be sent back to the client when done w/ goal
-    cwru_action::trajFeedback feedback_; // not used in this example; 
-    // would need to use: as_.publishFeedback(feedback_);
+    baxter_traj_streamer::trajGoal goal_; // goal message, received from client
+    baxter_traj_streamer::trajResult result_; // put results here, to be sent back to the client when done w/ goal
+    baxter_traj_streamer::trajFeedback feedback_; // not used in this example; 
+    // would need to use: as_.publishFeedback(feedback_); to send incremental feedback to the client
     baxter_core_msgs::JointCommand right_cmd, left_cmd;
     trajectory_msgs::JointTrajectory new_trajectory; // member var to receive new traj's;
     int g_count; //=0; //just for testing
     bool working_on_trajectory; // = false;
     void cmd_pose_right(Vectorq7x1 qvec);
+    void cmd_pose_left(Vectorq7x1 qvec);
 public:
     trajActionServer(); //define the body of the constructor outside of class definition
 
     ~trajActionServer(void) {
     }
     // Action Interface
-    void executeCB(const actionlib::SimpleActionServer<cwru_action::trajAction>::GoalConstPtr& goal);
+    void executeCB(const actionlib::SimpleActionServer<baxter_traj_streamer::trajAction>::GoalConstPtr& goal);
 };
 
+//implementation of the constructor:
+// member initialization list describes how to initialize member as_
+// member as_ will get instantiated with specified node-handle, name by which this server will be known,
+//  a pointer to the function to be executed upon receipt of a goal.
+//  
+// Syntax of naming the function to be invoked: get a pointer to the function, called executeCB, which is a member method
+// of our class exampleActionServer.  Since this is a class method, we need to tell boost::bind that it is a class member,
+// using the "this" keyword.  the _1 argument says that our executeCB takes one argument
+// the final argument  "false" says don't start the server yet.  (We'll do this in the constructor)
 
-//constructor starts populating the right_cmd message with joint names.
-//In this implementation, ALL joint names must be specified and ALL joint angle commands must be specified
-// for every command message.  Further, a fixed order of joints is assumed: from base to tip.
-// This actually makes the joint naming irrelevant, but the joint-command message will nonetheless be fully
-// populated according to the message type: baxter_core_msgs::JointCommand
 trajActionServer::trajActionServer() :
 as_(nh_, "trajActionServer", boost::bind(&trajActionServer::executeCB, this, _1), false)
 // in the above initialization, we name the server "example_action"
@@ -135,7 +144,6 @@ as_(nh_, "trajActionServer", boost::bind(&trajActionServer::executeCB, this, _1)
     right_cmd.names.push_back("right_w1");
     right_cmd.names.push_back("right_w2");
     // same order for left arm
-    // THIS HAS NOT BEEN COMPLETED; in fact, left arm (and head motion) might get implemented as separate action servers
     left_cmd.names.push_back("left_s0");
     left_cmd.names.push_back("left_s1");
     left_cmd.names.push_back("left_e0");
@@ -148,39 +156,63 @@ as_(nh_, "trajActionServer", boost::bind(&trajActionServer::executeCB, this, _1)
         right_cmd.command.push_back(0.0); // start commanding 0 angle for right-arm 7 joints
         left_cmd.command.push_back(0.0); // start commanding 0 angle for left-arm 7 joints
     }
-    g_count = 0; //carry-over from original action-server example; don't know if this will be useful in the future
+    g_count = 0;
     working_on_trajectory = false;
     as_.start(); //start the server running
 }
 
-//helper function: needs to convert Eigen-type vector into a C++ "vector" (variable-length array)
-// within a field of a baxter_core_msgs::JointCommand message
+//executeCB implementation: this is a member method that will get registered with the action server
+// argument type is very long.  Meaning:
+// actionlib is the package for action servers
+// SimpleActionServer is a templated class in this package (defined in the "actionlib" ROS package)
+// <baxter_traj_streamer::trajAction> customizes the simple action server to use our own "action" message 
+// defined in our package, "baxter_traj_streamer", in the subdirectory "action", called "traj.action"
+// The name "traj" is prepended to other message types created automatically during compilation.
+// e.g.,  "trajAction" is auto-generated from (our) base name "traj" and generic name "Action"
+
 void trajActionServer::cmd_pose_right(Vectorq7x1 qvec) {
-    //member var right_cmd_ already has joint names populated; just need to update the joint-angle commands
+    //member var right_cmd_ already has joint names populated
     for (int i = 0; i < 7; i++) {
         right_cmd.command[i] = qvec[i];
     }
     joint_cmd_pub_right.publish(right_cmd);
 }
 
-//this is where the bulk of the work is done, interpolating between potentially coarse joint-space poses
-// using the specified arrival times
-void trajActionServer::executeCB(const actionlib::SimpleActionServer<cwru_action::trajAction>::GoalConstPtr& goal) {
+void trajActionServer::cmd_pose_left(Vectorq7x1 qvec) {
+    for (uint i = 0; i < 7; i++)
+    {
+        left_cmd.command[i] = qvec[i];
+    }
+    joint_cmd_pub_left.publish(left_cmd);
+}
+
+void trajActionServer::executeCB(const actionlib::SimpleActionServer<baxter_traj_streamer::trajAction>::GoalConstPtr& goal) {
     double traj_clock, dt_segment, dq_segment, delta_q_segment, traj_final_time;
     int isegment;
     trajectory_msgs::JointTrajectoryPoint trajectory_point0;
 
     Vectorq7x1 qvec, qvec0, qvec_prev, qvec_new;
 
+    std::cout << "LR: " << goal->left_or_right << std::endl;
     //ROS_INFO("in executeCB");
     //ROS_INFO("goal input is: %d", goal->input);
+    //do work here: this is where your interesting code goes
+
+    //....
+
+    // for illustration, populate the "result" message with two numbers:
+    // the "input" is the message count, copied from goal->input (as sent by the client)
+    // the "goal_stamp" is the server's count of how many goals it has serviced so far
+    // if there is only one client, and if it is never restarted, then these two numbers SHOULD be identical...
+    // unless some communication got dropped, indicating an error
+    // send the result message back with the status of "success"
 
     g_count++; // keep track of total number of goals serviced since this server was started
     result_.return_val = g_count; // we'll use the member variable result_, defined in our class
-    //result_.traj_id = goal->traj_id;
+    result_.traj_id = goal->traj_id;
     //cout<<"received trajectory w/ "<<goal->trajectory.points.size()<<" points"<<endl;
     // copy trajectory to global var:
-    new_trajectory = goal->trajectory; // 
+    new_trajectory = goal->trajectory; // does this work?
     // insist that a traj have at least 2 pts
     int npts = new_trajectory.points.size();
     if (npts  < 2) {
@@ -191,7 +223,11 @@ void trajActionServer::executeCB(const actionlib::SimpleActionServer<cwru_action
         //got_new_trajectory = true;
         ROS_INFO("Cb received traj w/ npts = %d",npts);
         //cout << "Cb received traj w/ npts = " << new_trajectory.points.size() << endl;
-        //debug output...
+        //trajectory_msgs::JointTrajectoryPoint trajectory_point0;
+        //trajectory_point0 = new_trajectory.points[0];  
+        //trajectory_point0 =  tj_msg.points[0];   
+        //cout<<new_trajectory.points[0].positions.size()<<" =  new_trajectory.points[0].positions.size()"<<endl;
+        //cout<<"size of positions[]: "<<trajectory_point0.positions.size()<<endl;
         cout << "subgoals: " << endl;
         for (int i = 0; i < npts; i++) {
             for (int j = 0; j < 7; j++) { //copy from traj point to 7x1 vector
@@ -203,15 +239,17 @@ void trajActionServer::executeCB(const actionlib::SimpleActionServer<cwru_action
         as_.isActive();
 
         working_on_trajectory = true;
-
+        //got_new_trajectory=false;
         traj_clock = 0.0; // initialize clock for trajectory;
-        isegment = 0; //initialize the segment count
-        trajectory_point0 = new_trajectory.points[0]; //start trajectory from first point...should be at least close to
-          //current state of system; SHOULD CHECK THIS
-        for (int i = 0; i < 7; i++) { //copy from traj point to 7x1 Eigen-type vector
+        isegment = 0;
+        trajectory_point0 = new_trajectory.points[0];
+        for (int i = 0; i < 7; i++) { //copy from traj point to 7x1 vector
             qvec0[i] = trajectory_point0.positions[i];
         }
-        cmd_pose_right(qvec0); //populate and send out first command  
+        if (goal->left_or_right == 1)
+            cmd_pose_left(qvec0); //populate and send out first command  
+        else
+            cmd_pose_right(qvec0);
         qvec_prev = qvec0;
         cout << "start pt: " << qvec0.transpose() << endl;
     }
@@ -220,11 +258,14 @@ void trajActionServer::executeCB(const actionlib::SimpleActionServer<cwru_action
         // update isegment and qvec according to traj_clock; 
         //if traj_clock>= final_time, use exact end coords and set "working_on_trajectory" to false          
         working_on_trajectory = update_trajectory(traj_clock, new_trajectory, qvec_prev, isegment, qvec_new);
-        cmd_pose_right(qvec_new); // use qvec to populate object and send it to robot
+        if (goal->left_or_right == 1)
+            cmd_pose_left(qvec_new); // use qvec to populate object and send it to robot
+        else
+            cmd_pose_right(qvec_new);
         qvec_prev = qvec_new;
         cout << "traj_clock: " << traj_clock << "; vec:" << qvec_new.transpose() << endl;
         ros::spinOnce();
-        ros::Duration(dt_traj).sleep(); //update the outputs at time-step resolution specified by dt_traj
+        ros::Duration(dt_traj).sleep();
     }
     ROS_INFO("completed execution of a trajectory" );
     as_.setSucceeded(result_); // tell the client that we were successful acting on the request, and return the "result" message 
@@ -234,10 +275,9 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "traj_interpolator_action_server"); // name this node     
     ros::NodeHandle nh;
 
-    //this is how to command joint angles to Baxter;
-    //publisher is global...would be better to make it a member of class
+    //publisher is global
     joint_cmd_pub_right = nh.advertise<baxter_core_msgs::JointCommand>("/robot/limb/right/joint_command", 1);
-
+    joint_cmd_pub_left = nh.advertise<baxter_core_msgs::JointCommand>("/robot/limb/left/joint_command", 1);
     /* maybe restore this later...
     ROS_INFO("Initializing Services");
     ros::ServiceServer statusService = nh.advertiseService("trajInterpStatusSvc", trajInterpStatusSvc);
