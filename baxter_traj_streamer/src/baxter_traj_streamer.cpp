@@ -407,6 +407,12 @@ void Baxter_traj_streamer::stuff_left_trajectory(std::vector<Eigen::VectorXd> qv
         q_end = qvecs[iq];
         dqvec = q_end - q_start;
         std::cout << "dqvec: " << dqvec.transpose() << std::endl;
+        
+        del_time = transition_time(dqvec);
+        if (del_time< dt_traj)
+            del_time = dt_traj;
+        cout<<"stuff_traj: next pt = "<<q_end.transpose()<<endl; 
+
         net_time += del_time;
         ROS_INFO("iq = %d; del_time = %f; net time = %f",iq,del_time,net_time);        
         for (uint i = 0; i < 7; i++)  // copy over the joint-command values
